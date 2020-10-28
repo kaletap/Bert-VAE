@@ -4,18 +4,22 @@ import torch.nn.utils.rnn as rnn_utils
 from utils import to_var
 
 
+BERT_HIDDEN_DIM = 768
+
+
 class SentenceVAE(nn.Module):
-    def __init__(self, vocab_size, embedding_size, rnn_type, hidden_size, word_dropout, embedding_dropout, latent_size,
-                sos_idx, eos_idx, pad_idx, unk_idx, max_sequence_length, num_layers=1, bidirectional=False):
+    def __init__(self, vocab_size, embedding_size, encoder, rnn_type, hidden_size, tokenizer, word_dropout, embedding_dropout, latent_size,
+                 max_sequence_length, num_layers=1, bidirectional=False):
 
         super().__init__()
         self.tensor = torch.cuda.FloatTensor if torch.cuda.is_available() else torch.Tensor
 
         self.max_sequence_length = max_sequence_length
-        self.sos_idx = sos_idx
-        self.eos_idx = eos_idx
-        self.pad_idx = pad_idx
-        self.unk_idx = unk_idx
+        self.sos_idx = tokenizer.convert_tokens_to_ids(tokenizer.cls_token)
+        self.eos_idx = tokenizer.convert_tokens_to_ids(tokenizer.pad_token)
+        self.pad_idx = tokenizer.convert_tokens_to_ids(tokenizer.pad_token)
+        self.unk_idx = tokenizer.convert_tokens_to_ids(tokenizer.unk_token)
+        self.mask_idx = tokenizer.convert_tokens_to_ids(tokenizer.mask_token)
 
         self.latent_size = latent_size
 
@@ -37,36 +41,22 @@ class SentenceVAE(nn.Module):
         else:
             raise ValueError()
 
-        self.encoder_rnn = rnn(embedding_size, hidden_size, num_layers=num_layers, bidirectional=self.bidirectional,
-                               batch_first=True)
+        self.encoder = encoder  # e.g Roberta (or other transformer model) without any classification head
         self.decoder_rnn = rnn(embedding_size, hidden_size, num_layers=num_layers, bidirectional=self.bidirectional,
                                batch_first=True)
 
         self.hidden_factor = (2 if bidirectional else 1) * num_layers
 
-        self.hidden2mean = nn.Linear(hidden_size * self.hidden_factor, latent_size)
-        self.hidden2logv = nn.Linear(hidden_size * self.hidden_factor, latent_size)
+        self.hidden2mean = nn.Linear(BERT_HIDDEN_DIM, latent_size)
+        self.hidden2logv = nn.Linear(BERT_HIDDEN_DIM, latent_size)
         self.latent2hidden = nn.Linear(latent_size, hidden_size * self.hidden_factor)
         self.outputs2vocab = nn.Linear(hidden_size * (2 if bidirectional else 1), vocab_size)
 
-    def forward(self, input_sequence, length):
+    def forward(self, input_ids, attention_mask, length):
 
-        batch_size = input_sequence.size(0)
+        batch_size = input_ids.shape[0]
         sorted_lengths, sorted_idx = torch.sort(length, descending=True)
-        input_sequence = input_sequence[sorted_idx]
-
-        # ENCODER
-        input_embedding = self.embedding(input_sequence)
-
-        packed_input = rnn_utils.pack_padded_sequence(input_embedding, sorted_lengths.data.tolist(), batch_first=True)
-
-        _, hidden = self.encoder_rnn(packed_input)
-
-        if self.bidirectional or self.num_layers > 1:
-            # flatten hidden state
-            hidden = hidden.view(batch_size, self.hidden_size*self.hidden_factor)
-        else:
-            hidden = hidden.squeeze()
+        hidden = self.encoder(input_ids, attention_mask).last_hidden_state[:, 0, :]
 
         # REPARAMETERIZATION
         mean = self.hidden2mean(hidden)
@@ -85,18 +75,18 @@ class SentenceVAE(nn.Module):
         else:
             hidden = hidden.unsqueeze(0)
 
+        decoder_input_sequence = input_ids.clone()
         # decoder input
         if self.word_dropout_rate > 0:
             # randomly replace decoder input with <unk>
-            prob = torch.rand(input_sequence.size())
+            prob = torch.rand(input_ids.size())
             if torch.cuda.is_available():
                 prob=prob.cuda()
-            prob[(input_sequence.data - self.sos_idx) * (input_sequence.data - self.pad_idx) == 0] = 1
-            decoder_input_sequence = input_sequence.clone()
-            decoder_input_sequence[prob < self.word_dropout_rate] = self.unk_idx
-            input_embedding = self.embedding(decoder_input_sequence)
+            prob[(input_ids.data - self.sos_idx) * (input_ids.data - self.pad_idx) == 0] = 1
+            decoder_input_sequence[prob < self.word_dropout_rate] = self.mask_idx
+        input_embedding = self.embedding(decoder_input_sequence)
         input_embedding = self.embedding_dropout(input_embedding)
-        packed_input = rnn_utils.pack_padded_sequence(input_embedding, sorted_lengths.data.tolist(), batch_first=True)
+        packed_input = rnn_utils.pack_padded_sequence(input_embedding, sorted_lengths.data.tolist(), batch_first=True, enforce_sorted=True)
 
         # decoder forward pass
         outputs, _ = self.decoder_rnn(packed_input, hidden)
@@ -104,7 +94,7 @@ class SentenceVAE(nn.Module):
         # process outputs
         padded_outputs = rnn_utils.pad_packed_sequence(outputs, batch_first=True)[0]
         padded_outputs = padded_outputs.contiguous()
-        _,reversed_idx = torch.sort(sorted_idx)
+        _, reversed_idx = torch.sort(sorted_idx)
         padded_outputs = padded_outputs[reversed_idx]
         b,s,_ = padded_outputs.size()
 

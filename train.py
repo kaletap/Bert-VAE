@@ -1,17 +1,20 @@
-import os
-import json
-import time
-import torch
 import argparse
+import json
+import os
+import time
+from collections import OrderedDict, defaultdict
+
 import numpy as np
+import torch
+from datasets import load_dataset
 from multiprocessing import cpu_count
 from tensorboardX import SummaryWriter
 from torch.utils.data import DataLoader
-from collections import OrderedDict, defaultdict
+from transformers import RobertaForMaskedLM, RobertaTokenizerFast
 
-from ptb import PTB
-from utils import to_var, idx2word, expierment_name
 from model import SentenceVAE
+from text_dataset import DataCollator, TextDataset
+from utils import to_var, idx2word, expierment_name
 
 
 def main(args):
@@ -19,23 +22,36 @@ def main(args):
 
     splits = ['train', 'valid'] + (['test'] if args.test else [])
 
-    datasets = OrderedDict()
-    for split in splits:
-        datasets[split] = PTB(
-            data_dir=args.data_dir,
-            split=split,
-            create_data=args.create_data,
-            max_sequence_length=args.max_sequence_length,
-            min_occ=args.min_occ
-        )
+    RANDOM_SEED = 42
+    # Taking only subset of data (faster training, fine-tuning the whole dataset takes ~20 hours per epoch)
+    TRAIN_SIZE = 5_000
+    VALID_SIZE = 1_000
+    TEST_SIZE = 1_000
 
+    dataset = load_dataset("yelp_polarity", split="train")
+    train_test_split = dataset.train_test_split(train_size=TRAIN_SIZE, seed=RANDOM_SEED)
+    train_dataset = train_test_split["train"]
+    test_val_dataset = train_test_split["test"].train_test_split(train_size=VALID_SIZE, test_size=TEST_SIZE,
+                                                                 seed=RANDOM_SEED)
+    val_dataset, test_dataset = test_val_dataset["train"], test_val_dataset["test"]
+
+    tokenizer = RobertaTokenizerFast.from_pretrained("roberta-base")
+    datasets = OrderedDict()
+    datasets['train'] = TextDataset(train_dataset, tokenizer, args.max_sequence_length)
+    datasets['valid'] = TextDataset(val_dataset, tokenizer, args.max_sequence_length)
+    if args.test:
+        datasets['text'] = TextDataset(test_dataset, tokenizer, args.max_sequence_length)
+
+    print(f"Loading Roberta model. Setting {args.trainable_layers} trainable layers.")
+    roberta_model = RobertaForMaskedLM.from_pretrained('roberta-base', return_dict=True).roberta
+    for p in roberta_model.embeddings.parameters():
+        p.requires_grad = False
+    encoder_layers = roberta_model.encoder.layer
+    for layer in range(len(encoder_layers) - args.trainable_layers):
+        for p in encoder_layers[layer].parameters():
+            p.requires_grad = False
     params = dict(
         vocab_size=datasets['train'].vocab_size,
-        sos_idx=datasets['train'].sos_idx,
-        eos_idx=datasets['train'].eos_idx,
-        pad_idx=datasets['train'].pad_idx,
-        unk_idx=datasets['train'].unk_idx,
-        max_sequence_length=args.max_sequence_length,
         embedding_size=args.embedding_size,
         rnn_type=args.rnn_type,
         hidden_size=args.hidden_size,
@@ -43,9 +59,10 @@ def main(args):
         embedding_dropout=args.embedding_dropout,
         latent_size=args.latent_size,
         num_layers=args.num_layers,
-        bidirectional=args.bidirectional
+        bidirectional=args.bidirectional,
+        max_sequence_length=args.max_sequence_length
     )
-    model = SentenceVAE(**params)
+    model = SentenceVAE(encoder=roberta_model, tokenizer=tokenizer, **params)
 
     if torch.cuda.is_available():
         model = model.cuda()
@@ -97,9 +114,10 @@ def main(args):
             data_loader = DataLoader(
                 dataset=datasets[split],
                 batch_size=args.batch_size,
-                shuffle=split=='train',
+                shuffle=(split == 'train'),
                 num_workers=cpu_count(),
-                pin_memory=torch.cuda.is_available()
+                pin_memory=torch.cuda.is_available(),
+                collate_fn=DataCollator(tokenizer)
             )
 
             tracker = defaultdict(tensor)
@@ -119,7 +137,7 @@ def main(args):
                         batch[k] = to_var(v)
 
                 # Forward pass
-                logp, mean, logv, z = model(batch['input'], batch['length'])
+                logp, mean, logv, z = model(batch['input'], batch['attention_mask'], batch['length'])
 
                 # loss calculation
                 NLL_loss, KL_loss, KL_weight = loss_fn(logp, batch['target'],
@@ -199,6 +217,8 @@ if __name__ == '__main__':
     parser.add_argument('-ls', '--latent_size', type=int, default=16)
     parser.add_argument('-wd', '--word_dropout', type=float, default=0)
     parser.add_argument('-ed', '--embedding_dropout', type=float, default=0.5)
+    parser.add_argument('-tl', '--trainable_layers', type=int, default=2,
+                        help="Number of layers to optimize in transformer encoder")
 
     parser.add_argument('-af', '--anneal_function', type=str, default='logistic')
     parser.add_argument('-k', '--k', type=float, default=0.0025)
