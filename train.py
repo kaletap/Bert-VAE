@@ -23,12 +23,13 @@ def main(args):
     splits = ['train', 'valid'] + (['test'] if args.test else [])
 
     RANDOM_SEED = 42
+
+    dataset = load_dataset("yelp_polarity", split="train")
     # Taking only subset of data (faster training, fine-tuning the whole dataset takes ~20 hours per epoch)
-    TRAIN_SIZE = 5_000
+    TRAIN_SIZE = len(dataset) - 2_000
     VALID_SIZE = 1_000
     TEST_SIZE = 1_000
 
-    dataset = load_dataset("yelp_polarity", split="train")
     train_test_split = dataset.train_test_split(train_size=TRAIN_SIZE, seed=RANDOM_SEED)
     train_dataset = train_test_split["train"]
     test_val_dataset = train_test_split["test"].train_test_split(train_size=VALID_SIZE, test_size=TEST_SIZE,
@@ -172,8 +173,7 @@ def main(args):
                 if split == 'valid':
                     if 'target_sents' not in tracker:
                         tracker['target_sents'] = list()
-                    tracker['target_sents'] += idx2word(batch['target'].data, i2w=datasets['train'].get_i2w(),
-                                                        pad_idx=datasets['train'].pad_idx)
+                    tracker['target_sents'] += idx2word(batch['target'].tolist(), tokenizer=tokenizer)
                     tracker['z'] = torch.cat((tracker['z'], z.data), dim=0)
 
             print("%s Epoch %02d/%i, Mean ELBO %9.4f" % (split.upper(), epoch, args.epochs, tracker['ELBO'].mean()))
@@ -181,13 +181,15 @@ def main(args):
             if args.tensorboard_logging:
                 writer.add_scalar("%s-Epoch/ELBO" % split.upper(), torch.mean(tracker['ELBO']), epoch)
 
-            # save a dump of all sentences and the encoded latent space
+            # save a dump of all sentences, the encoded latent space and generated sequences
             if split == 'valid':
-                dump = {'target_sents': tracker['target_sents'], 'z': tracker['z'].tolist()}
+                samples, z = model.inference(z=tracker['z'])
+                generated_sents = idx2word(samples.tolist(), tokenizer)
+                dump = {'target_sents': tracker['target_sents'], 'z': tracker['z'].tolist(), 'generated_sents': generated_sents}
                 if not os.path.exists(os.path.join('dumps', ts)):
                     os.makedirs('dumps/'+ts)
                 with open(os.path.join('dumps/'+ts+'/valid_E%i.json' % epoch), 'w') as dump_file:
-                    json.dump(dump,dump_file)
+                    json.dump(dump, dump_file, indent=3)
 
             # save checkpoint
             if split == 'train':

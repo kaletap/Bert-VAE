@@ -19,14 +19,11 @@ def to_var(x):
     return x
 
 
-def idx2word(idx, i2w, pad_idx):
-    sent_str = [str()]*len(idx)
-    for i, sent in enumerate(idx):
-        for word_id in sent:
-            if word_id == pad_idx:
-                break
-            sent_str[i] += i2w[word_id.item()] + " "
-        sent_str[i] = sent_str[i].strip()
+def idx2word(idx, tokenizer):
+    sent_str = list()
+    for sent in idx:
+        text = tokenizer.decode(sent)
+        sent_str.append(text.strip())
     return sent_str
 
 
