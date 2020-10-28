@@ -12,8 +12,8 @@ class TextDataset(Dataset):
         self.dataset = dataset
         self.tokenizer = tokenizer
         self.max_sequence_length = max_sequence_length
-        self.i2w = tokenizer.get_vocab()
-        self.w2i = {word: idx for idx, word in enumerate(self.i2w)}
+        self.w2i = tokenizer.get_vocab()
+        self.i2w = {idx: word for word, idx in self.w2i.items()}
 
     def __len__(self):
         return len(self.dataset)
