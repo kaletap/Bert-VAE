@@ -74,7 +74,7 @@ class DataCollator:
         target_ids = torch.tensor(target_ids)
         length = torch.tensor(length)
 
-        attention_mask = (input_ids == self.pad_idx).long()
+        attention_mask = (input_ids != self.pad_idx).long()
 
         return {
             'input': input_ids,
