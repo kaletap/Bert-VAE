@@ -2,6 +2,7 @@ import argparse
 import json
 import os
 import time
+import warnings
 from collections import OrderedDict, defaultdict
 
 import numpy as np
@@ -45,9 +46,12 @@ def main(args):
 
     print(f"Loading Roberta model. Setting {args.trainable_layers} trainable layers.")
     roberta_model = RobertaForMaskedLM.from_pretrained('roberta-base', return_dict=True).roberta
-    for p in roberta_model.embeddings.parameters():
-        p.requires_grad = False
+    if not args.train_embeddings:
+        for p in roberta_model.embeddings.parameters():
+            p.requires_grad = False
     encoder_layers = roberta_model.encoder.layer
+    if args.trainable_layers > len(encoder_layers):
+        warnings.warn(f"You are asking to train {args.trainable_layers} layers, but this model has only {len(encoder_layers)}")
     for layer in range(len(encoder_layers) - args.trainable_layers):
         for p in encoder_layers[layer].parameters():
             p.requires_grad = False
@@ -222,7 +226,9 @@ if __name__ == '__main__':
     parser.add_argument('-wd', '--word_dropout', type=float, default=0)
     parser.add_argument('-ed', '--embedding_dropout', type=float, default=0.5)
     parser.add_argument('-tl', '--trainable_layers', type=int, default=2,
-                        help="Number of layers to optimize in transformer encoder")
+                        help='Number of layers to optimize in transformer encoder')
+    parser.add_argument('-te', '--train_embeddings', action='store_true',
+                        help='Whether or not to train embedding layer')
 
     parser.add_argument('-af', '--anneal_function', type=str, default='logistic')
     parser.add_argument('-k', '--k', type=float, default=0.0025)
