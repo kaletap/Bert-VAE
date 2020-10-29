@@ -227,7 +227,7 @@ if __name__ == '__main__':
     parser.add_argument('-ep', '--epochs', type=int, default=10)
     parser.add_argument('-bs', '--batch_size', type=int, default=32)
     parser.add_argument('-lr', '--learning_rate', type=float, default=0.001)
-    parser.add_argument('-wd', '--weight_decay', type=float, default=0.001)
+    parser.add_argument('-l2', '--weight_decay', type=float, default=0.001)
 
     parser.add_argument('-eb', '--embedding_size', type=int, default=300)
     parser.add_argument('-rnn', '--rnn_type', type=str, default='gru')
