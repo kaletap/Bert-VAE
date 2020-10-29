@@ -56,6 +56,7 @@ class SentenceVAE(nn.Module):
 
         batch_size = input_ids.shape[0]
         sorted_lengths, sorted_idx = torch.sort(length, descending=True)
+        input_ids = input_ids[sorted_idx]
         hidden = self.encoder(input_ids, attention_mask).last_hidden_state[:, 0, :]
 
         # REPARAMETERIZATION

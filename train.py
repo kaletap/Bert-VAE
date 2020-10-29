@@ -92,7 +92,7 @@ def main(args):
         if step <= x0:
             return args.initial_kl_weight
         if anneal_function == 'logistic':
-            return float(1/(1+np.exp(-k*(step-x0))))
+            return float(1/(1+np.exp(-k*(step-x0-2500))))
         elif anneal_function == 'linear':
             return min(1, step/x0)
 
