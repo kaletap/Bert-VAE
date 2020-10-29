@@ -90,7 +90,7 @@ def main(args):
 
     def kl_anneal_function(anneal_function, step, k, x0):
         if step <= x0:
-            return 0.001
+            return args.initial_kl_weight
         if anneal_function == 'logistic':
             return float(1/(1+np.exp(-k*(step-x0))))
         elif anneal_function == 'linear':
@@ -124,7 +124,7 @@ def main(args):
             ]
         }
     ]
-    optimizer = torch.optim.Adam(params, lr=args.learning_rate)
+    optimizer = torch.optim.Adam(params, lr=args.learning_rate, weight_decay=args.weight_decay)
 
     tensor = torch.cuda.FloatTensor if torch.cuda.is_available() else torch.Tensor
     step = 0
@@ -221,15 +221,13 @@ def main(args):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('--data_dir', type=str, default='data')
-    parser.add_argument('--create_data', action='store_true')
     parser.add_argument('--max_sequence_length', type=int, default=256)
-    parser.add_argument('--min_occ', type=int, default=1)
     parser.add_argument('--test', action='store_true')
 
     parser.add_argument('-ep', '--epochs', type=int, default=10)
     parser.add_argument('-bs', '--batch_size', type=int, default=32)
     parser.add_argument('-lr', '--learning_rate', type=float, default=0.001)
+    parser.add_argument('-wd', '--weight_decay', type=float, default=0.001)
 
     parser.add_argument('-eb', '--embedding_size', type=int, default=300)
     parser.add_argument('-rnn', '--rnn_type', type=str, default='gru')
@@ -247,6 +245,7 @@ if __name__ == '__main__':
     parser.add_argument('-af', '--anneal_function', type=str, default='logistic')
     parser.add_argument('-k', '--k', type=float, default=0.0025)
     parser.add_argument('-x0', '--x0', type=int, default=2500)
+    parser.add_argument('-w0', '--initial_kl_weight', type=float, default=0.001)
 
     parser.add_argument('-v', '--print_every', type=int, default=50)
     parser.add_argument('-tb', '--tensorboard_logging', action='store_true')
