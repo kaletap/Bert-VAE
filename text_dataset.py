@@ -23,7 +23,7 @@ class TextDataset(Dataset):
         tokens = self.tokenizer.tokenize(text)[:self.max_sequence_length - 1]
 
         input_tokens = [self.tokenizer.cls_token] + tokens
-        target_tokens = tokens + ['<eos>']
+        target_tokens = tokens + [self.tokenizer.pad_token]
 
         input = self.tokenizer.convert_tokens_to_ids(input_tokens)
         target = self.tokenizer.convert_tokens_to_ids(target_tokens)
@@ -42,15 +42,15 @@ class TextDataset(Dataset):
 
     @property
     def pad_idx(self):
-        return self.tokenizer.convert_tokens_to_ids('<pad>')
+        return self.tokenizer.pad_token_id
 
     @property
     def sos_idx(self):
-        return self.w2i['<cls>']
+        return self.tokenizer.cls_token_id
 
     @property
     def eos_idx(self):
-        return self.w2i['<pad>']
+        return self.tokenizer.pad_token_id
 
     def get_w2i(self):
         return self.w2i
@@ -61,20 +61,20 @@ class TextDataset(Dataset):
 
 class DataCollator:
     def __init__(self, tokenizer):
-        self.pad_idx = tokenizer.convert_tokens_to_ids(tokenizer.pad_token)
+        self.pad_token_id = tokenizer.pad_token_id
 
     def __call__(self, examples: List[dict]):
         length = [example['length'] for example in examples]
         biggest_length = max(length)
         # we assume that Dataset takes care of truncation
-        input_ids = [example['input'] + [self.pad_idx]*(biggest_length - len(example['input'])) for example in examples]
-        target_ids = [example['target'] + [self.pad_idx]*(biggest_length - len(example['input'])) for example in examples]
+        input_ids = [example['input'] + [self.pad_token_id]*(biggest_length - len(example['input'])) for example in examples]
+        target_ids = [example['target'] + [self.pad_token_id]*(biggest_length - len(example['input'])) for example in examples]
 
         input_ids = torch.tensor(input_ids)
         target_ids = torch.tensor(target_ids)
         length = torch.tensor(length)
 
-        attention_mask = (input_ids != self.pad_idx).long()
+        attention_mask = (input_ids != self.pad_token_id).long()
 
         return {
             'input': input_ids,
