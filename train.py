@@ -110,7 +110,19 @@ def main(args):
 
         return NLL_loss, KL_loss, KL_weight
 
-    optimizer = torch.optim.Adam(model.parameters(), lr=args.learning_rate)
+    params = [
+        {'params': model.encoder.parameters(), 'lr': 3e-5},  # the best learning rate for transformer
+        {
+            'params': [
+                *model.decoder_rnn.parameters(),
+                *model.hidden2mean.parameters(),
+                *model.hidden2logv.parameters(),
+                *model.latent2hidden.parameters(),
+                *model.outputs2vocab.parameters()
+            ]
+        }
+    ]
+    optimizer = torch.optim.Adam(params, lr=args.learning_rate)
 
     tensor = torch.cuda.FloatTensor if torch.cuda.is_available() else torch.Tensor
     step = 0
