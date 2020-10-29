@@ -83,6 +83,8 @@ def main(args):
         json.dump(params, f, indent=4)
 
     def kl_anneal_function(anneal_function, step, k, x0):
+        if step <= x0:
+            return 0
         if anneal_function == 'logistic':
             return float(1/(1+np.exp(-k*(step-x0))))
         elif anneal_function == 'linear':
