@@ -26,7 +26,6 @@ def main(args):
     RANDOM_SEED = 42
 
     dataset = load_dataset("yelp_polarity", split="train")
-    # Taking only subset of data (faster training, fine-tuning the whole dataset takes ~20 hours per epoch)
     TRAIN_SIZE = len(dataset) - 2_000
     VALID_SIZE = 1_000
     TEST_SIZE = 1_000
@@ -39,10 +38,10 @@ def main(args):
 
     tokenizer = RobertaTokenizerFast.from_pretrained("roberta-base")
     datasets = OrderedDict()
-    datasets['train'] = TextDataset(train_dataset, tokenizer, args.max_sequence_length)
-    datasets['valid'] = TextDataset(val_dataset, tokenizer, args.max_sequence_length)
+    datasets['train'] = TextDataset(train_dataset, tokenizer, args.max_sequence_length, not args.disable_sent_tokenize)
+    datasets['valid'] = TextDataset(val_dataset, tokenizer, args.max_sequence_length, not args.disable_sent_tokenize)
     if args.test:
-        datasets['text'] = TextDataset(test_dataset, tokenizer, args.max_sequence_length)
+        datasets['text'] = TextDataset(test_dataset, tokenizer, args.max_sequence_length, not args.disable_sent_tokenize)
 
     print(f"Loading Roberta model. Setting {args.trainable_layers} trainable layers.")
     roberta_model = RobertaForMaskedLM.from_pretrained('roberta-base', return_dict=True).roberta
@@ -224,6 +223,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
 
     parser.add_argument('--max_sequence_length', type=int, default=256)
+    parser.add_argument('--disable_sent_tokenize', action='store_true')
     parser.add_argument('--test', action='store_true')
 
     parser.add_argument('-ep', '--epochs', type=int, default=10)

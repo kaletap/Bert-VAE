@@ -1,17 +1,21 @@
+import random
 from typing import List
 
+import nltk
 import torch
 from torch.utils.data import Dataset
 
 
 class TextDataset(Dataset):
 
-    def __init__(self, dataset, tokenizer, max_sequence_length):
+    def __init__(self, dataset, tokenizer, max_sequence_length: int, sent_tokenize: bool = True, min_sent_length: int = 4):
 
         super().__init__()
         self.dataset = dataset
         self.tokenizer = tokenizer
         self.max_sequence_length = max_sequence_length
+        self.sent_tokenize = sent_tokenize
+        self.min_sent_length = min_sent_length
         self.w2i = tokenizer.get_vocab()
         self.i2w = {idx: word for word, idx in self.w2i.items()}
 
@@ -19,7 +23,9 @@ class TextDataset(Dataset):
         return len(self.dataset)
 
     def __getitem__(self, idx):
-        text = self.dataset[idx]['text']
+        text_all = self.dataset[idx]['text']
+        sentences = [sent for sent in nltk.tokenize.sent_tokenize(text_all) if len(sent) > self.min_sent_length]
+        text = random.choice(sentences)
         tokens = self.tokenizer.tokenize(text)[:self.max_sequence_length - 1]
 
         input_tokens = [self.tokenizer.cls_token] + tokens
