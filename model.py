@@ -15,11 +15,11 @@ class SentenceVAE(nn.Module):
         self.tensor = torch.cuda.FloatTensor if torch.cuda.is_available() else torch.Tensor
 
         self.max_sequence_length = max_sequence_length
-        self.sos_idx = tokenizer.convert_tokens_to_ids(tokenizer.cls_token)
-        self.eos_idx = tokenizer.convert_tokens_to_ids(tokenizer.pad_token)
-        self.pad_idx = tokenizer.convert_tokens_to_ids(tokenizer.pad_token)
-        self.unk_idx = tokenizer.convert_tokens_to_ids(tokenizer.unk_token)
-        self.mask_idx = tokenizer.convert_tokens_to_ids(tokenizer.mask_token)
+        self.sos_idx = tokenizer.cls_token_id
+        self.eos_idx = tokenizer.pad_token_id
+        self.pad_idx = tokenizer.pad_token_id
+        self.unk_idx = tokenizer.unk_token_id
+        self.mask_idx = tokenizer.mask_token_id
 
         self.latent_size = latent_size
 
