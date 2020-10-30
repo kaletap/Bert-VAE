@@ -11,7 +11,7 @@ from datasets import load_dataset
 from multiprocessing import cpu_count
 from tensorboardX import SummaryWriter
 from torch.utils.data import DataLoader
-from transformers import RobertaForMaskedLM, RobertaTokenizerFast
+from transformers import AutoModel, AutoTokenizer
 
 from model import SentenceVAE
 from text_dataset import DataCollator, TextDataset
@@ -36,19 +36,19 @@ def main(args):
                                                                  seed=RANDOM_SEED)
     val_dataset, test_dataset = test_val_dataset["train"], test_val_dataset["test"]
 
-    tokenizer = RobertaTokenizerFast.from_pretrained("roberta-base")
+    tokenizer = AutoTokenizer.from_pretrained(args.model_name, use_fast=True)
     datasets = OrderedDict()
     datasets['train'] = TextDataset(train_dataset, tokenizer, args.max_sequence_length, not args.disable_sent_tokenize)
     datasets['valid'] = TextDataset(val_dataset, tokenizer, args.max_sequence_length, not args.disable_sent_tokenize)
     if args.test:
         datasets['text'] = TextDataset(test_dataset, tokenizer, args.max_sequence_length, not args.disable_sent_tokenize)
 
-    print(f"Loading Roberta model. Setting {args.trainable_layers} trainable layers.")
-    roberta_model = RobertaForMaskedLM.from_pretrained('roberta-base', return_dict=True).roberta
+    print(f"Loading {args.model_name} model. Setting {args.trainable_layers} trainable layers.")
+    encoder = AutoModel.from_pretrained(args.model_name, return_dict=True)
     if not args.train_embeddings:
-        for p in roberta_model.embeddings.parameters():
+        for p in encoder.embeddings.parameters():
             p.requires_grad = False
-    encoder_layers = roberta_model.encoder.layer
+    encoder_layers = encoder.encoder.layer
     if args.trainable_layers > len(encoder_layers):
         warnings.warn(f"You are asking to train {args.trainable_layers} layers, but this model has only {len(encoder_layers)}")
     for layer in range(len(encoder_layers) - args.trainable_layers):
@@ -66,7 +66,7 @@ def main(args):
         bidirectional=args.bidirectional,
         max_sequence_length=args.max_sequence_length
     )
-    model = SentenceVAE(encoder=roberta_model, tokenizer=tokenizer, **params)
+    model = SentenceVAE(encoder=encoder, tokenizer=tokenizer, **params)
 
     if torch.cuda.is_available():
         model = model.cuda()
@@ -112,7 +112,7 @@ def main(args):
         return NLL_loss, KL_loss, KL_weight
 
     params = [
-        {'params': model.encoder.parameters(), 'lr': 3e-5},  # the best learning rate for transformer
+        {'params': model.encoder.parameters(), 'lr': args.encoder_learning_rate},
         {
             'params': [
                 *model.decoder_rnn.parameters(),
@@ -229,8 +229,11 @@ if __name__ == '__main__':
     parser.add_argument('-ep', '--epochs', type=int, default=10)
     parser.add_argument('-bs', '--batch_size', type=int, default=32)
     parser.add_argument('-lr', '--learning_rate', type=float, default=0.001)
+    parser.add_argument('-elr', '--encoder_learning_rate', type=float, default=2e-5)
     parser.add_argument('-l2', '--weight_decay', type=float, default=0.001)
 
+    parser.add_argument('-mn', '--model_name', type=str, default='roberta-base',
+                        help='Name of transformers model to use')
     parser.add_argument('-eb', '--embedding_size', type=int, default=300)
     parser.add_argument('-rnn', '--rnn_type', type=str, default='gru')
     parser.add_argument('-hs', '--hidden_size', type=int, default=256)
