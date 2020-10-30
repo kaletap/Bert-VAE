@@ -203,9 +203,11 @@ def main(args):
 
             # save a dump of all sentences, the encoded latent space and generated sequences
             if split == 'valid':
-                samples, z = model.inference(z=tracker['z'])
+                samples, _ = model.inference(z=tracker['z'])
                 generated_sents = idx2word(samples.tolist(), tokenizer)
-                dump = {'target_sents': tracker['target_sents'], 'z': tracker['z'].tolist(), 'generated_sents': generated_sents}
+                sents = [{'original': target, 'generated': generated}
+                         for target, generated in zip(tracker['target_sents'], generated_sents)]
+                dump = {'sentences': sents, 'z': tracker['z'].tolist()}
                 if not os.path.exists(os.path.join('dumps', ts)):
                     os.makedirs('dumps/'+ts)
                 with open(os.path.join('dumps/'+ts+'/valid_E%i.json' % epoch), 'w') as dump_file:
