@@ -29,7 +29,7 @@ class TextDataset(Dataset):
         tokens = self.tokenizer.tokenize(text)[:self.max_sequence_length - 1]
 
         input_tokens = [self.tokenizer.cls_token] + tokens
-        target_tokens = tokens + [self.tokenizer.pad_token]
+        target_tokens = tokens + [self.tokenizer.eos_token]
 
         input = self.tokenizer.convert_tokens_to_ids(input_tokens)
         target = self.tokenizer.convert_tokens_to_ids(target_tokens)
@@ -56,7 +56,7 @@ class TextDataset(Dataset):
 
     @property
     def eos_idx(self):
-        return self.tokenizer.pad_token_id
+        return self.tokenizer.eos_token_id
 
     def get_w2i(self):
         return self.w2i
