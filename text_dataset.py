@@ -18,6 +18,8 @@ class TextDataset(Dataset):
         self.min_sent_length = min_sent_length
         self.w2i = tokenizer.get_vocab()
         self.i2w = {idx: word for word, idx in self.w2i.items()}
+        self.cls_token = tokenizer.cls_token
+        self.eos_token = tokenizer.eos_token or tokenizer.sep_token
 
     def __len__(self):
         return len(self.dataset)
@@ -28,8 +30,8 @@ class TextDataset(Dataset):
         text = random.choice(sentences) if sentences else text_all
         tokens = self.tokenizer.tokenize(text)[:self.max_sequence_length - 1]
 
-        input_tokens = [self.tokenizer.cls_token] + tokens
-        target_tokens = tokens + [self.tokenizer.eos_token]
+        input_tokens = [self.cls_token] + tokens
+        target_tokens = tokens + [self.eos_token]
 
         input = self.tokenizer.convert_tokens_to_ids(input_tokens)
         target = self.tokenizer.convert_tokens_to_ids(target_tokens)
@@ -56,7 +58,7 @@ class TextDataset(Dataset):
 
     @property
     def eos_idx(self):
-        return self.tokenizer.eos_token_id
+        return self.tokenizer.eos_token_id or self.tokenizer.sep_token_id
 
     def get_w2i(self):
         return self.w2i

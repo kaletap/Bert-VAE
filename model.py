@@ -16,7 +16,7 @@ class SentenceVAE(nn.Module):
 
         self.max_sequence_length = max_sequence_length
         self.sos_idx = tokenizer.cls_token_id
-        self.eos_idx = tokenizer.pad_token_id
+        self.eos_idx = tokenizer.eos_token_id or tokenizer.sep_token_id
         self.pad_idx = tokenizer.pad_token_id
         self.unk_idx = tokenizer.unk_token_id
         self.mask_idx = tokenizer.mask_token_id
