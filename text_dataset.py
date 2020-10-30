@@ -25,7 +25,7 @@ class TextDataset(Dataset):
     def __getitem__(self, idx):
         text_all = self.dataset[idx]['text']
         sentences = [sent for sent in nltk.tokenize.sent_tokenize(text_all) if len(sent) > self.min_sent_length]
-        text = random.choice(sentences)
+        text = random.choice(sentences) if sentences else text_all
         tokens = self.tokenizer.tokenize(text)[:self.max_sequence_length - 1]
 
         input_tokens = [self.tokenizer.cls_token] + tokens
