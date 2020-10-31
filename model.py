@@ -67,11 +67,7 @@ class SentenceVAE(nn.Module):
         # DECODER
         hidden = self.latent2hidden(z)
 
-        if self.bidirectional or self.num_layers > 1:
-            # unflatten hidden state
-            hidden = hidden.view(self.hidden_factor, batch_size, self.hidden_size)
-        else:
-            hidden = hidden.unsqueeze(0)
+        hidden = hidden.view(self.hidden_factor, batch_size, self.hidden_size)
 
         decoder_input_sequence = input_ids.clone()
         # decoder input
@@ -96,7 +92,7 @@ class SentenceVAE(nn.Module):
         return logp, mean, logv, z
 
     def inference(self, n=4, z=None):
-
+        # TODO: chyba muszę to zrozumieć
         if z is None:
             batch_size = n
             z = to_var(torch.randn([batch_size, self.latent_size]))
@@ -105,11 +101,7 @@ class SentenceVAE(nn.Module):
 
         hidden = self.latent2hidden(z)
 
-        if self.bidirectional or self.num_layers > 1:
-            # unflatten hidden state
-            hidden = hidden.view(self.hidden_factor, batch_size, self.hidden_size)
-        else:
-            hidden = hidden.unsqueeze(0)
+        hidden = hidden.view(self.hidden_factor, batch_size, self.hidden_size)
 
         # required for dynamic stopping of sentence generation
         sequence_idx = torch.arange(0, batch_size, out=self.tensor()).long()  # all idx of batch
