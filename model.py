@@ -81,13 +81,21 @@ class SentenceVAE(nn.Module):
         input_embedding = self.embedding(decoder_input_sequence)
         input_embedding = self.embedding_dropout(input_embedding)
 
+        # rnn input preparation
+        sorted_lengths, sorted_idx = torch.sort(length, descending=True)
+        packed_input = rnn_utils.pack_padded_sequence(input_embedding, sorted_lengths.data.tolist(), batch_first=True)
+
         # decoder forward pass
-        outputs, _ = self.decoder_rnn(input_embedding, hidden)
+        outputs, _ = self.decoder_rnn(packed_input, hidden)
+
+        # process outputs
+        padded_outputs = rnn_utils.pad_packed_sequence(outputs, batch_first=True, padding_value=self.pad_idx)[0]
+        padded_outputs = padded_outputs.contiguous()
+        _, reversed_idx = torch.sort(sorted_idx)
+        padded_outputs = padded_outputs[reversed_idx]
 
         # project outputs to vocab
-        b, s, _ = outputs.size()
-        logp = nn.functional.log_softmax(self.outputs2vocab(outputs), dim=-1)
-        logp = logp.view(b, s, self.embedding.num_embeddings)
+        logp = nn.functional.log_softmax(self.outputs2vocab(padded_outputs), dim=-1)
 
         return logp, mean, logv, z
 
